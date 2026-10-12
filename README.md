@@ -1,41 +1,59 @@
-# burnrate
+# burnrate 🔥
 
-A tiny always-on-top widget that shows how fast you're burning through your **Claude Code** and **Codex** limits – right on your desktop, refreshed every two minutes.
+**How fast are you burning through your Claude Code and Codex limits?** burnrate puts the answer in a tiny always-on-top widget in the corner of your Mac's screen, so you never have to type `/usage` again or get surprised by a limit halfway through a task.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![macOS](https://img.shields.io/badge/macOS-Swift%20%2F%20AppKit-black?logo=apple)
+[![Built with Claude](https://img.shields.io/badge/built%20with-Claude-D97757?logo=anthropic&logoColor=white)](#built-with-claude)
+![Unofficial](https://img.shields.io/badge/status-unofficial-lightgrey)
 
 <p>
-  <img src="docs/compact.png" width="260" alt="burnrate, compact view">
+  <img src="docs/mini.png" height="56" alt="Mini view">
+</p>
+<p>
+  <img src="docs/compact.png" width="250" alt="Compact view">
   &nbsp;
-  <img src="docs/details.png" width="260" alt="burnrate, details view">
+  <img src="docs/details.png" width="250" alt="Details view">
 </p>
 
-## What it shows
+<sub>Mini · Compact · Details. Real numbers from a real Monday morning.</sub>
 
-- **Limits in %**: current session and week, the same numbers `/usage` (Claude Code) and `/status` (Codex) show, plus time until reset.
-- **Pace & projection**: average %/h since the window started and where you'll land at reset (the lighter part of the bar). If you'd hit the limit before the reset, it tells you when.
-- **Burn rate** 🔥: tokens per minute over the last 30 minutes, read from the local session logs.
-- **Details** (macOS, click *Details ▾*): tokens for the last 5 h / today / this week, split by model, and a 5-hour activity chart.
-- Only the tools you actually have set up are shown. German UI on German systems, English everywhere else.
+## Features
 
-## Requirements
+- **Three sizes.** *Mini* is just the percentages, *Compact* adds bars, reset times and pace, *Details* adds the token breakdown. Switch any time.
+- **Your limits at a glance.** Session and weekly usage in %, the same numbers `/usage` (Claude Code) and `/status` (Codex) show, with time until reset.
+- **Pace & projection.** Average %/h since the window started and where you'll end up at reset (the lighter part of the bar). If you're on track to hit the limit early, it tells you when.
+- **Burn rate.** Tokens per minute over the last 30 minutes, straight from your local session logs.
+- **Details.** Tokens for the last 5 h, today and this week, split by model, plus a 5-hour activity chart.
+- **Stays out of the way.** Floats above your windows on every desktop, remembers where you put it, and only shows the tools you actually have set up.
+- **Speaks your language.** German on German systems, English everywhere else.
 
-- You're logged in to **Claude Code** with a subscription and/or the **Codex CLI** with a ChatGPT account.
-- **macOS**: Swift compiler from the Xcode Command Line Tools (`xcode-select --install`). The widget is compiled on first start (takes a few seconds).
-- **Windows 10/11**: nothing – Windows PowerShell 5.1 is preinstalled.
+## Getting Started
 
-## Start
+### Requirements
 
-Download or clone the repo, then:
+- Logged in to **Claude Code** with a Claude subscription and/or to the **Codex CLI** with a ChatGPT account.
+- **macOS** with the Swift compiler from the Xcode Command Line Tools (`xcode-select --install`). burnrate compiles itself on first start, which takes a few seconds.
 
-| | Start | Autostart at login |
-|---|---|---|
-| **macOS** | Double-click `start.command` | `macos/install-autostart.sh` |
-| **Windows** | Double-click `start.cmd` | `powershell -ExecutionPolicy Bypass -File windows\install-autostart.ps1` |
+### Install & run
 
-To remove the autostart again: `macos/uninstall-autostart.sh` or `windows\uninstall-autostart.ps1`.
+```sh
+git clone https://github.com/sven-haude/burnrate.git
+```
 
-If macOS refuses to open `start.command` (downloaded ZIP), right-click it → *Open* once, or run `./start.command` in Terminal.
+…or download the ZIP from the green **Code** button. Then:
 
-**Using it:** drag the widget wherever you like (the position is remembered), right-click for *Refresh now*, *Move to top left* and *Quit*.
+- **Start:** double-click `start.command` (or run `./start.command`).
+- **Start automatically at login:** `macos/install-autostart.sh`. To remove it again: `macos/uninstall-autostart.sh`.
+
+> If macOS refuses to open `start.command` from a downloaded ZIP, right-click it → **Open** once, or run `./start.command` in Terminal.
+
+## Usage
+
+- **Switch views:** the buttons at the bottom (*Mini ▴*, *Details ▾*, *Less ▴*), or right-click → *Mini / Compact / Details*. In Mini, right-click to get back.
+- **Move it:** drag it anywhere. The position is remembered.
+- **Right-click** also gives you *Refresh now*, *Move to top left* and *Quit*.
+- **Hover** over a value in Mini view to see the full name and reset time.
 
 ## Configuration
 
@@ -43,21 +61,32 @@ Everything lives in [`config.env`](config.env): refresh interval, burn-rate wind
 
 ## How it works
 
-- It reuses the login token Claude Code and Codex already store on your machine (macOS Keychain or `~/.claude/.credentials.json`, and `~/.codex/auth.json`) and calls the same usage endpoints the CLIs call. The token is only ever sent to those endpoints. burnrate never refreshes tokens – if one has expired, just open Claude Code or Codex once.
-- Token counts come from the local session logs (`~/.claude/projects`, `~/.codex/sessions`). They're read, never sent anywhere. That's also why they only cover Claude Code and the Codex CLI, not claude.ai or ChatGPT in the browser.
-- "Tok" = input + output + cache-write tokens. Cache reads are shown separately; they're cheap and would drown out everything else.
+- burnrate reuses the login token that Claude Code and Codex already keep on your Mac (the macOS Keychain and `~/.codex/auth.json`) and calls the same usage endpoints the CLIs call. The token is only ever sent to those endpoints. burnrate never refreshes tokens; if one has expired, open Claude Code or Codex once.
+- Token counts come from the local session logs (`~/.claude/projects`, `~/.codex/sessions`). They're only read, never sent anywhere. That's also why they cover Claude Code and the Codex CLI, but not claude.ai or ChatGPT in the browser.
+- "Tok" means input + output + cache-write tokens. Cache reads are shown separately because they're cheap and would drown out everything else.
 
 ## Good to know
 
-- **Unofficial.** Not affiliated with Anthropic or OpenAI. The usage endpoints are undocumented and may change at any time – if they do, the widget shows a warning instead of numbers.
-- Don't set the refresh interval too low: the endpoints rate-limit (HTTP 429).
-- The weekly projection is a straight-line extrapolation, so it overshoots early in the week.
-- The Windows version is newer and has seen less testing than the macOS one. Issues and PRs welcome.
+- **Unofficial.** burnrate is not affiliated with Anthropic or OpenAI. The usage endpoints are undocumented and may change at any time. If they do, the widget shows a warning instead of numbers.
+- **Don't poll too often.** The endpoints rate-limit (HTTP 429), so keep the refresh interval at a minute or more.
+- **Projections are straight lines.** The weekly projection overshoots early in the week and settles down as the week goes on.
+- **macOS only.** A Windows or Linux port would be welcome.
 
-## Make it yours
+## Contributing
 
-It's deliberately small: one Swift file for macOS (`macos/Burnrate.swift`), one PowerShell file for Windows (`windows/Burnrate.ps1`). Fork it, tweak it, send a PR.
+It's deliberately small: the whole widget is one Swift file ([`macos/Burnrate.swift`](macos/Burnrate.swift)). Fork it, make it yours, and send a pull request if you build something others would like too.
+
+The repo includes a [`CLAUDE.md`](CLAUDE.md), so if you work on it with Claude Code, Claude already knows how the project is put together.
+
+## Built with Claude
+
+burnrate was built in pair-programming sessions with [Claude Code](https://claude.com/claude-code): Sven brought the idea and the direction and tried every version on a real desktop, Claude wrote most of the code and docs. Commits made this way carry a `Co-Authored-By: Claude` trailer, so GitHub credits Claude as co-author.
+
+## Contributors
+
+- **Sven Haude** ([@sven-haude](https://github.com/sven-haude)): idea, direction, testing
+- **Claude** (Anthropic): co-author of the code and docs
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 Sven Haude

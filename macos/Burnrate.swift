@@ -67,6 +67,8 @@ struct Limit {
     let severity: String
     let resetsAt: Date?
     let window: TimeInterval?
+    /// Kurzform für die Mini-Ansicht, nil = dort nicht anzeigen
+    var short: String? = nil
 }
 
 struct UsageError: Error {
@@ -151,13 +153,16 @@ func parseClaudeLimit(_ limit: [String: Any]) -> Limit {
     let kind = limit["kind"] as? String ?? "?"
     let title: String
     let window: TimeInterval?
+    var short: String? = nil
     switch kind {
     case "session":
         title = t("Aktuelle Session", "Current session")
         window = 5 * hour
+        short = "5h"
     case "weekly_all":
         title = t("Aktuelle Woche · alle Modelle", "Current week · all models")
         window = week
+        short = t("Wo", "wk")
     case "weekly_scoped":
         let scope = limit["scope"] as? [String: Any]
         let model = (scope?["model"] as? [String: Any])?["display_name"] as? String
@@ -173,7 +178,8 @@ func parseClaudeLimit(_ limit: [String: Any]) -> Limit {
         percent: (limit["percent"] as? NSNumber)?.doubleValue ?? 0,
         severity: limit["severity"] as? String ?? "normal",
         resetsAt: parseISODate(limit["resets_at"] as? String),
-        window: window
+        window: window,
+        short: short
     )
 }
 
@@ -219,6 +225,11 @@ func codexTitle(windowSeconds: Double, prefix: String) -> String {
     return prefix.isEmpty ? span : "\(span) · \(prefix)"
 }
 
+func codexShort(windowSeconds: Double) -> String {
+    let hours = Int(windowSeconds / hour)
+    return hours == 168 ? t("Wo", "wk") : hours < 24 ? "\(hours)h" : "\(hours / 24)" + t("T", "d")
+}
+
 func parseCodexWindows(_ rateLimit: [String: Any]?, prefix: String) -> [Limit] {
     guard let rateLimit else { return [] }
     let reached = rateLimit["limit_reached"] as? Bool ?? false
@@ -230,7 +241,8 @@ func parseCodexWindows(_ rateLimit: [String: Any]?, prefix: String) -> [Limit] {
             percent: (w["used_percent"] as? NSNumber)?.doubleValue ?? 0,
             severity: reached ? "limit_reached" : "normal",
             resetsAt: (w["reset_at"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue) },
-            window: seconds
+            window: seconds,
+            short: prefix.isEmpty ? codexShort(windowSeconds: seconds ?? 0) : nil
         )
     }
 }
@@ -698,24 +710,51 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var timer: Timer?
     var widthConstraint: NSLayoutConstraint!
 
-    var expanded: Bool {
-        get { UserDefaults.standard.bool(forKey: "expanded") }
-        set { UserDefaults.standard.set(newValue, forKey: "expanded") }
+    enum Mode: String, CaseIterable {
+        case mini, compact, details
+
+        var title: String {
+            switch self {
+            case .mini: return "Mini"
+            case .compact: return t("Kompakt", "Compact")
+            case .details: return "Details"
+            }
+        }
+        var width: CGFloat {
+            switch self {
+            case .mini: return 0  // ergibt sich aus dem Inhalt
+            case .compact: return 250
+            case .details: return 290
+            }
+        }
+        var padding: CGFloat { self == .mini ? 10 : 12 }
     }
 
-    static let compactWidth: CGFloat = 250
-    static let expandedWidth: CGFloat = 290
-    static let padding: CGFloat = 12
+    var mode: Mode {
+        get {
+            let defaults = UserDefaults.standard
+            if let raw = defaults.string(forKey: "mode"), let mode = Mode(rawValue: raw) { return mode }
+            return defaults.bool(forKey: "expanded") ? .details : .compact  // Einstellung älterer Versionen
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "mode") }
+    }
+    var expanded: Bool { mode == .details }
+    var modeItems: [Mode: NSMenuItem] = [:]
+
     static let screenMargin: CGFloat = 10
 
-    var width: CGFloat { expanded ? Widget.expandedWidth : Widget.compactWidth }
+    var miniWidth: CGFloat?
+    /// Mini passt sich dem Inhalt an, die anderen Ansichten haben feste Breiten
+    var width: CGFloat { mode == .mini ? (miniWidth ?? 0) + 2 * padding : mode.width }
+    var padding: CGFloat { mode.padding }
+    var stackConstraints: [NSLayoutConstraint] = []
 
     init(config: Config) {
         self.config = config
         claudeScanner = LogScanner(format: .claude, root: config.claudeProjectsDir)
         codexScanner = LogScanner(format: .codex, root: config.codexSessionsDir)
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: Widget.compactWidth, height: 80),
+            contentRect: NSRect(x: 0, y: 0, width: Mode.compact.width, height: 80),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -743,7 +782,13 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.contentView = background
 
         let menu = NSMenu()
-        menu.addItem(withTitle: t("Details ein/aus", "Toggle details"), action: #selector(toggleExpanded), keyEquivalent: "d").target = self
+        for (index, mode) in Mode.allCases.enumerated() {
+            let item = menu.addItem(withTitle: mode.title, action: #selector(selectMode(_:)), keyEquivalent: "\(index + 1)")
+            item.target = self
+            item.representedObject = mode.rawValue
+            modeItems[mode] = item
+        }
+        menu.addItem(.separator())
         menu.addItem(withTitle: t("Jetzt aktualisieren", "Refresh now"), action: #selector(refresh), keyEquivalent: "r").target = self
         menu.addItem(withTitle: t("Nach oben links", "Move to top left"), action: #selector(moveToCorner), keyEquivalent: "").target = self
         menu.addItem(.separator())
@@ -755,13 +800,13 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         background.addSubview(stack)
-        widthConstraint = stack.widthAnchor.constraint(equalToConstant: width - 2 * Widget.padding)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: background.topAnchor, constant: Widget.padding),
-            stack.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -Widget.padding),
-            stack.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: Widget.padding),
-            widthConstraint,
-        ])
+        widthConstraint = stack.widthAnchor.constraint(equalToConstant: width - 2 * padding)
+        stackConstraints = [
+            stack.topAnchor.constraint(equalTo: background.topAnchor, constant: padding),
+            stack.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -padding),
+            stack.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: padding),
+        ]
+        NSLayoutConstraint.activate(stackConstraints + [widthConstraint])
         render()
     }
 
@@ -800,10 +845,15 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.setFrameTopLeftPoint(NSPoint(x: visible.minX + Widget.screenMargin, y: visible.maxY - Widget.screenMargin))
     }
 
-    @objc func toggleExpanded() {
-        expanded.toggle()
+    @objc func selectMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = Mode(rawValue: raw) else { return }
+        self.mode = mode
         render()
     }
+
+    @objc func showMini() { mode = .mini; render() }
+    @objc func showCompact() { mode = .compact; render() }
+    @objc func showDetails() { mode = .details; render() }
 
     @objc func quit() {
         NSApp.terminate(nil)
@@ -1040,6 +1090,47 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ), spacingAfter: 8)
     }
 
+    /// Kleine Tabelle: eine Zeile pro Tool, eine Spalte pro Zeitfenster (5h, Woche, …)
+    func renderMini(_ sections: [Section]) {
+        var columns: [String] = []
+        for limit in sections.flatMap(\.limits) {
+            if let short = limit.short, !columns.contains(short) { columns.append(short) }
+        }
+        // Spalte für Warnung/Laden nur, wenn sie gebraucht wird (sonst bleibt rechts Leerraum)
+        let needsStatus = sections.contains { $0.error != nil || $0.limits.isEmpty }
+        let rows: [[NSView]] = sections.map { section in
+            let name = label(section.name, size: 11, weight: .bold, color: .secondaryLabelColor)
+            let cells: [NSView] = columns.map { column in
+                guard let limit = section.limits.first(where: { $0.short == column }) else { return NSGridCell.emptyContentView }
+                let short = label(column, size: 9, weight: .semibold, color: .tertiaryLabelColor)
+                let percent = label("\(Int(limit.percent.rounded())) %", size: 12, weight: .bold,
+                                    color: color(forPercent: limit.percent, severity: limit.severity), mono: true)
+                let pair = NSStackView(views: [short, percent])
+                pair.spacing = 3
+                pair.alignment = .firstBaseline
+                pair.toolTip = "\(limit.title): \(Int(limit.percent.rounded())) % · \(resetText(limit.resetsAt))"
+                return pair
+            }
+            guard needsStatus else { return [name] + cells }
+            var status: NSView = NSGridCell.emptyContentView
+            if let error = section.error {
+                let warning = label("⚠︎", size: 11, weight: .bold, color: .systemOrange)
+                warning.toolTip = error
+                status = warning
+            } else if section.limits.isEmpty {
+                status = label("…", size: 11, color: .tertiaryLabelColor)
+            }
+            return [name] + cells + [status]
+        }
+        let grid = NSGridView(views: rows)
+        grid.rowSpacing = 6
+        grid.columnSpacing = 12
+        for index in 1..<grid.numberOfColumns { grid.column(at: index).xPlacement = .trailing }
+        grid.rowAlignment = .firstBaseline
+        stack.addArrangedSubview(grid)
+        miniWidth = grid.fittingSize.width
+    }
+
     func render(_ section: Section) {
         let now = Date()
         let stats = section.scan.map {
@@ -1067,31 +1158,50 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    func footerButton(_ title: String, _ action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.isBordered = false
+        button.attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        return button
+    }
+
     func render() {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        widthConstraint.constant = width - 2 * Widget.padding
+        widthConstraint.constant = width - 2 * padding
+        stackConstraints[0].constant = padding
+        stackConstraints[1].constant = -padding
+        stackConstraints[2].constant = padding
+        for (mode, item) in modeItems { item.state = mode == self.mode ? .on : .off }
 
         let visible = [claude, codex].filter(\.installed)
-        for section in visible {
-            render(section)
-            if let last = stack.arrangedSubviews.last { stack.setCustomSpacing(14, after: last) }
-        }
         if visible.isEmpty {
             addFullWidth(label(t("Weder Claude Code noch Codex gefunden", "Neither Claude Code nor Codex found"), size: 11, color: .secondaryLabelColor), spacingAfter: 8)
         }
 
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        let toggle = NSButton(title: expanded ? t("Weniger ▴", "Less ▴") : "Details ▾", target: self, action: #selector(toggleExpanded))
-        toggle.isBordered = false
-        toggle.attributedTitle = NSAttributedString(string: toggle.title, attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: NSColor.secondaryLabelColor,
-        ])
-        addFullWidth(splitRow(
-            label(updatedAt.map { t("Stand ", "Updated ") + f.string(from: $0) } ?? "", size: 10, color: .tertiaryLabelColor),
-            toggle
-        ))
+        if mode == .mini {
+            if visible.isEmpty { miniWidth = Mode.compact.width - 2 * padding } else { renderMini(visible) }
+            widthConstraint.constant = width - 2 * padding
+        } else {
+            for section in visible {
+                render(section)
+                if let last = stack.arrangedSubviews.last { stack.setCustomSpacing(14, after: last) }
+            }
+
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            let buttons = mode == .details
+                ? NSStackView(views: [footerButton(t("Weniger ▴", "Less ▴"), #selector(showCompact))])
+                : NSStackView(views: [footerButton("Mini ▴", #selector(showMini)), footerButton("Details ▾", #selector(showDetails))])
+            buttons.spacing = 10
+            buttons.setHuggingPriority(.required, for: .horizontal)
+            addFullWidth(splitRow(
+                label(updatedAt.map { t("Stand ", "Updated ") + f.string(from: $0) } ?? "", size: 10, color: .tertiaryLabelColor),
+                buttons
+            ))
+        }
         if expanded {
             addFullWidth(label(t("Tok = Input + Output + Cache-Write (ohne Cache-Reads)", "Tok = input + output + cache write (excl. cache reads)"), size: 9, color: .tertiaryLabelColor))
         }
@@ -1099,7 +1209,7 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Größe an Inhalt anpassen, obere linke Ecke bleibt stehen
         let top = panel.frame.maxY
         panel.contentView?.layoutSubtreeIfNeeded()
-        let height = stack.fittingSize.height + 2 * Widget.padding
+        let height = stack.fittingSize.height + 2 * padding
         panel.setFrame(NSRect(x: panel.frame.minX, y: top - height, width: width, height: height), display: true)
     }
 }
