@@ -20,8 +20,8 @@
 
 ## Features
 
-- **Three sizes.** *Mini* is just the percentages, *Compact* adds bars, reset times and pace, *Details* adds the token breakdown. Switch any time.
-- **Your limits at a glance.** Session and weekly usage in %, the same numbers `/usage` (Claude Code) and `/status` (Codex) show, with time until reset.
+- **Three sizes.** *Mini* is just the percentages, one column per limit, *Compact* adds bars, reset times and pace, *Details* adds the token breakdown. Switch any time.
+- **Your limits at a glance.** Session and weekly usage in %, plus any extra per-model limit your plan has (e.g. Fable), the same numbers `/usage` (Claude Code) and `/status` (Codex) show, with time until reset.
 - **Pace & projection.** Average %/h since the window started and where you'll end up at reset (the lighter part of the bar). If you're on track to hit the limit early, it tells you when.
 - **Burn rate.** Tokens per minute over the last 30 minutes, straight from your local session logs.
 - **Details.** Tokens for the last 5 h, today and this week, split by model, plus a 5-hour activity chart.
