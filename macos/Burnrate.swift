@@ -169,6 +169,7 @@ func parseClaudeLimit(_ limit: [String: Any]) -> Limit {
         let surface = (scope?["surface"] as? [String: Any])?["display_name"] as? String
         title = t("Aktuelle Woche · ", "Current week · ") + (model ?? surface ?? t("eingeschränkt", "scoped"))
         window = week
+        short = model ?? surface
     default:
         title = kind
         window = nil
@@ -741,6 +742,13 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var expanded: Bool { mode == .details }
     var modeItems: [Mode: NSMenuItem] = [:]
 
+    /// Codex-Werte anzeigen (Rechtsklick-Menü); aus = kein Abruf, kein Log-Scan, keine Anzeige
+    var showCodex: Bool {
+        get { UserDefaults.standard.object(forKey: "showCodex") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "showCodex") }
+    }
+    var codexItem: NSMenuItem!
+
     static let screenMargin: CGFloat = 10
 
     var miniWidth: CGFloat?
@@ -788,6 +796,9 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
             item.representedObject = mode.rawValue
             modeItems[mode] = item
         }
+        menu.addItem(.separator())
+        codexItem = menu.addItem(withTitle: t("Codex anzeigen", "Show Codex"), action: #selector(toggleCodex), keyEquivalent: "")
+        codexItem.target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: t("Jetzt aktualisieren", "Refresh now"), action: #selector(refresh), keyEquivalent: "r").target = self
         menu.addItem(withTitle: t("Nach oben links", "Move to top left"), action: #selector(moveToCorner), keyEquivalent: "").target = self
@@ -851,6 +862,11 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         render()
     }
 
+    @objc func toggleCodex() {
+        showCodex.toggle()
+        refresh()
+    }
+
     @objc func showMini() { mode = .mini; render() }
     @objc func showCompact() { mode = .compact; render() }
     @objc func showDetails() { mode = .details; render() }
@@ -863,8 +879,8 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let fm = FileManager.default
         claude.installed = fm.fileExists(atPath: config.claudeProjectsDir.path)
             || hasKeychainEntry(service: config.claudeKeychainService)
-        codex.installed = fm.fileExists(atPath: config.codexAuthFile)
-            || fm.fileExists(atPath: config.codexSessionsDir.path)
+        codex.installed = showCodex
+            && (fm.fileExists(atPath: config.codexAuthFile) || fm.fileExists(atPath: config.codexSessionsDir.path))
         if claude.installed { refreshClaude() }
         if codex.installed { refreshCodex() }
         refreshLocal()
@@ -1175,6 +1191,7 @@ final class Widget: NSObject, NSApplicationDelegate, NSWindowDelegate {
         stackConstraints[1].constant = -padding
         stackConstraints[2].constant = padding
         for (mode, item) in modeItems { item.state = mode == self.mode ? .on : .off }
+        codexItem.state = showCodex ? .on : .off
 
         let visible = [claude, codex].filter(\.installed)
         if visible.isEmpty {
