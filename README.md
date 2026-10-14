@@ -20,12 +20,12 @@
 
 ## Features
 
-- **Three sizes.** *Mini* is just the percentages, *Compact* adds bars, reset times and pace, *Details* adds the token breakdown. Switch any time.
-- **Your limits at a glance.** Session and weekly usage in %, the same numbers `/usage` (Claude Code) and `/status` (Codex) show, with time until reset.
+- **Three sizes.** *Mini* is just the percentages, one column per limit, *Compact* adds bars, reset times and pace, *Details* adds the token breakdown. Switch any time.
+- **Your limits at a glance.** Session and weekly usage in %, plus any extra per-model limit your plan has (e.g. Fable), the same numbers `/usage` (Claude Code) and `/status` (Codex) show, with time until reset.
 - **Pace & projection.** Average %/h since the window started and where you'll end up at reset (the lighter part of the bar). If you're on track to hit the limit early, it tells you when.
 - **Burn rate.** Tokens per minute over the last 30 minutes, straight from your local session logs.
 - **Details.** Tokens for the last 5 h, today and this week, split by model, plus a 5-hour activity chart.
-- **Stays out of the way.** Floats above your windows on every desktop, remembers where you put it, and only shows the tools you actually have set up.
+- **Stays out of the way.** Floats above your windows on every desktop, remembers where you put it, and only shows the tools you actually have set up. Codex can be hidden entirely if you only care about Claude.
 - **Speaks your language.** German on German systems, English everywhere else.
 
 ## Getting Started
@@ -52,7 +52,7 @@ git clone https://github.com/sven-haude/burnrate.git
 
 - **Switch views:** the buttons at the bottom (*Mini ▴*, *Details ▾*, *Less ▴*), or right-click → *Mini / Compact / Details*. In Mini, right-click to get back.
 - **Move it:** drag it anywhere. The position is remembered.
-- **Right-click** also gives you *Refresh now*, *Move to top left* and *Quit*.
+- **Right-click** also gives you *Show Codex* (hide or show the Codex section, including its API calls), *Refresh now*, *Move to top left* and *Quit*.
 - **Hover** over a value in Mini view to see the full name and reset time.
 
 ## Configuration

@@ -30,7 +30,7 @@ Force English for a run with `./macos/.build/burnrate -AppleLanguages '(en)'` (a
 - **Tokens:** read from the macOS Keychain (`Claude Code-credentials`) and `~/.codex/auth.json`. Never refresh them – that would rotate the refresh token under the CLI's feet.
 - **Memory:** the local logs are ~1 GB per week with single lines over 1 MB. The scanner reads in 1 MB chunks into a reused buffer, extracts fields with `memmem` instead of parsing whole lines as JSON, and keeps events as compact 32-byte structs. Target footprint is ~35 MB (`footprint <pid>`); don't regress this.
 - **Dedup:** Claude Code writes one log line per content block with the same message id (last one wins); Codex repeats `token_count` events with identical totals.
-- **UserDefaults domain is the binary name** (`burnrate`): `mode` (mini/compact/details), `positionX`/`positionY`.
+- **UserDefaults domain is the binary name** (`burnrate`): `mode` (mini/compact/details), `positionX`/`positionY`, `showCodex` (bool, default true; off = no fetch, no log scan, no section).
 
 ## Conventions
 
